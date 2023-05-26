@@ -1,4 +1,6 @@
-# S3 Image Uploader
+### Fork from: https://github.com/jvsteiner/s3-image-uploader
+
+# S3 Image
 
 This is a plugin for [Obsidian](https://obsidian.md). It was generated based on the [standard plugin template](https://github.com/obsidianmd/obsidian-sample-plugin).
 

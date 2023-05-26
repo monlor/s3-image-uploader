@@ -43,6 +43,7 @@ interface S3UploaderSettings {
 	localUploadFolder: string;
 	useCustomEndpoint: boolean;
 	customEndpoint: string;
+	imageUrlPrefix: string;
 	forcePathStyle: boolean;
 	uploadVideo: boolean;
 	uploadAudio: boolean;
@@ -62,6 +63,7 @@ const DEFAULT_SETTINGS: S3UploaderSettings = {
 	localUploadFolder: "",
 	useCustomEndpoint: false,
 	customEndpoint: "",
+	imageUrlPrefix: "",
 	forcePathStyle: false,
 	uploadVideo: false,
 	uploadAudio: false,
@@ -176,17 +178,16 @@ export default class S3UploaderPlugin extends Plugin {
 				.update(new Uint8Array(buf))
 				.digest("hex");
 			const contentType = file?.type;
-			const newFileName =
-				digest +
-				"." +
-				file.name.slice(((file?.name.lastIndexOf(".") - 1) >>> 0) + 2);
+			const newFileName = file.name;
 			const pastePlaceText = `![uploading...](${newFileName})\n`;
 			editor.replaceSelection(pastePlaceText);
 
 			// upload the image
+			const today = new Date();
+			const date = `${today.getFullYear()}/${today.getMonth() + 1}/${today.getDate()}`
 			const folder = fmUploadFolder
 				? fmUploadFolder
-				: this.settings.folder;
+				: this.settings.folder.replace('{date}', date);
 			const key = folder ? folder + "/" + newFileName : newFileName;
 
 			if (!localUpload) {
@@ -235,7 +236,7 @@ export default class S3UploaderPlugin extends Plugin {
 				// Use local upload
 				const localUploadFolder = fmUploadFolder
 					? fmUploadFolder
-					: this.settings.localUploadFolder;
+					: this.settings.localUploadFolder.replace('{date}', date);
 				const localUploadPath = localUploadFolder
 					? localUploadFolder + "/" + newFileName
 					: newFileName;
@@ -292,9 +293,15 @@ export default class S3UploaderPlugin extends Plugin {
 		let apiEndpoint = this.settings.useCustomEndpoint
 			? this.settings.customEndpoint
 			: `https://s3.${this.settings.region}.amazonaws.com/`;
-		this.settings.imageUrlPath = this.settings.forcePathStyle
-			? apiEndpoint + this.settings.bucket + "/"
-			: apiEndpoint.replace("://", `://${this.settings.bucket}.`);
+			
+		let imageUrlPrefix = this.settings.imageUrlPrefix
+		if (imageUrlPrefix === "") {
+			this.settings.imageUrlPath = this.settings.forcePathStyle
+				? apiEndpoint + this.settings.bucket + "/"
+				: apiEndpoint.replace("://", `://${this.settings.bucket}.`);
+		} else {
+			this.settings.imageUrlPath = imageUrlPrefix
+		}
 			
 			if (this.settings.bypassCors) {
 				this.s3 = new S3Client({
@@ -357,21 +364,21 @@ class S3UploaderSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Settings for S3 Image Uploader" });
+		containerEl.createEl("h2", { text: "Settings for S3 Image" });
 
-		containerEl.createEl("br");
+		// containerEl.createEl("br");
 
-		const coffeeDiv = containerEl.createDiv("coffee");
-		const coffeeLink = coffeeDiv.createEl("a", {
-			href: "https://www.buymeacoffee.com/jvsteiner",
-		});
-		const coffeeImg = coffeeLink.createEl("img", {
-			attr: {
-				src: "https://cdn.buymeacoffee.com/buttons/v2/default-blue.png",
-			},
-		});
-		coffeeImg.height = 45;
-		containerEl.createEl("br");
+		// const coffeeDiv = containerEl.createDiv("coffee");
+		// const coffeeLink = coffeeDiv.createEl("a", {
+		// 	href: "https://www.buymeacoffee.com/jvsteiner",
+		// });
+		// const coffeeImg = coffeeLink.createEl("img", {
+		// 	attr: {
+		// 		src: "https://cdn.buymeacoffee.com/buttons/v2/default-blue.png",
+		// 	},
+		// });
+		// coffeeImg.height = 45;
+		// containerEl.createEl("br");
 
 		new Setting(containerEl)
 			.setName("AWS Access Key ID")
@@ -427,7 +434,7 @@ class S3UploaderSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Bucket folder")
-			.setDesc("Optional folder in s3 bucket.")
+			.setDesc("Optional folder in s3 bucket. For example: {date}")
 			.addText((text) =>
 				text
 					.setPlaceholder("folder")
@@ -550,6 +557,21 @@ class S3UploaderSettingTab extends PluginSettingTab {
 							: "https://" + value; 
 						value = value.replace(/([^\/])$/, '$1/'); // Force to end with slash
 						this.plugin.settings.customEndpoint = value.trim();
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Image Url Prefix")
+			.setDesc(
+				'Image URL prefix, which can be used for CDN'
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("https://cdn.myhost.com/")
+					.setValue(this.plugin.settings.imageUrlPrefix)
+					.onChange(async (value) => {
+						this.plugin.settings.imageUrlPrefix = value.trim();
 						await this.plugin.saveSettings();
 					})
 			);
